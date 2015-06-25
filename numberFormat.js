@@ -8,8 +8,10 @@ function NumberFormat(format, symbols) {
     this.symbols = symbols || {decimalSeparator: ",",
                                groupingSeparator: ",",
                                currency: "$",
-                               currencyCode: "USD"};
+                               currencyCode: "USD",
+                               zeroDigit: "0"};
     // default values for any format
+    this.zeroCharCodeOffset = this.symbols["zeroDigit"].charCodeAt(0) - NumberFormat.ZERO.charCodeAt(0);
     this.hasCurrency = false;
     this.multiplier = 0;
     this.minDigits = 1;
@@ -203,16 +205,25 @@ NumberFormat.prototype.replaceCurrency = function(str) {
     return str;
 };
 
+NumberFormat.prototype.translateDigits = function(charArray) {
+    if (this.zeroCharCodeOffset) {
+        for (var i = 0; i < charArray.length; i++) {
+            charArray[i] = String.fromCharCode(charArray[i].charCodeAt(0) + this.zeroCharCodeOffset);
+        }
+    }
+    return charArray;
+};
+
 /**
  * Format a number into a string. Also can take in a string of the format "#.#" for formatting numbers
  * requiring greater than double precision.
  */
 NumberFormat.prototype.format = function(number) {
     var ns;
-    if ($A.util.isString(number)) {
+    if (typeof number === "string") {
         ns = number;
     } else {
-        if (!$A.util.isFiniteNumber(number)) {
+        if (!isFinite(number)) {
             throw new Error("Unable to format " + number);
         }
         // convert to string
@@ -227,7 +238,7 @@ NumberFormat.prototype.format = function(number) {
         charArray.shift();
     }
     // find the decimal place and remove it
-    var decimalPos = $A.util.arrayIndexOf(charArray, ".");
+    var decimalPos = charArray.indexOf(".");
     if (decimalPos === -1) {
         decimalPos = charArray.length;
     } else {
@@ -274,12 +285,12 @@ NumberFormat.prototype.format = function(number) {
         suffix = this.negativeSuffix;
     }
     var result = [];
-    if (prefix) {
-        result.push(prefix);
-    }
     if (negative && !this.hasNegativePattern) {
         // if there is no negative pattern, append '-' for negative numbers
         result.push("-");
+    }
+    if (prefix) {
+        result.push(prefix);
     }
     
     var zeroPad = this.minDigits - decimalPos;
@@ -293,14 +304,14 @@ NumberFormat.prototype.format = function(number) {
     // format the integral part
     if (this.groupingDigits <= 0 || decimalPos <= this.groupingDigits) {
         // no need for grouping
-        result = result.concat(charArray.slice(0, decimalPos));
+        result = result.concat(this.translateDigits(charArray.slice(0, decimalPos)));
     } else {
         var dist = decimalPos % this.groupingDigits || this.groupingDigits;
-        result = result.concat(charArray.slice(0, dist));
+        result = result.concat(this.translateDigits(charArray.slice(0, dist));
         var intPart = charArray.slice(dist, decimalPos);
         while (intPart.length > 0) {
             result.push(this.symbols["groupingSeparator"]);
-            result = result.concat(intPart.splice(0, this.groupingDigits));
+            result = result.concat(this.translateDigits(intPart.splice(0, this.groupingDigits)));
         }
     }
 
@@ -309,10 +320,10 @@ NumberFormat.prototype.format = function(number) {
     if (fracLength > 0 || this.minFractionDigits > 0) {
         result.push(this.symbols["decimalSeparator"]);
         if (fracLength > 0) {
-            result = result.concat(charArray.slice(decimalPos));
+            result = result.concat(this.translateDigits(charArray.slice(decimalPos)));
         }
         for (i = fracLength; i < this.minFractionDigits; i++) {
-            result.push(NumberFormat.ZERO);
+            result.push(this.symbols["zeroDigit"]);
         }
     }
     
